@@ -1,0 +1,38 @@
+name: Update LaunchGood campaign stats
+
+on:
+  schedule:
+    # Run every 6 hours
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+    # Allow manual run from Actions tab
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Fetch LaunchGood stats
+        run: node scripts/fetch-launchgood-stats.js
+
+      - name: Commit and push if changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add almuflihoon-stats-pack/launchgood-stats.json
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update LaunchGood campaign stats"
+            git push
+          fi

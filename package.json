@@ -1,0 +1,11 @@
+{
+  "name": "almuflihoon-stats",
+  "description": "Scrape and update LaunchGood campaign stats (raised, goal, supporters, days left)",
+  "private": true,
+  "scripts": {
+    "fetch-stats": "node scripts/fetch-launchgood-stats.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
