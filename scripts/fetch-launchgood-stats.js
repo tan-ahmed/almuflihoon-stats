@@ -9,13 +9,8 @@ const { join, dirname } = require("path");
 const CAMPAIGN_URL =
   "https://www.launchgood.com/v4/campaign/almuflihoon_fundraiser_1";
 
-// Output next to this script's repo root: almuflihoon-stats-pack/launchgood-stats.json
-const OUT_PATH = join(
-  __dirname,
-  "..",
-  "almuflihoon-stats-pack",
-  "launchgood-stats.json"
-);
+// Output at repo root: data/launchgood-stats.json
+const OUT_PATH = join(__dirname, "..", "data", "launchgood-stats.json");
 
 const DEFAULT = {
   raised: 9003,
