@@ -5,7 +5,10 @@
   "scripts": {
     "fetch-stats": "node scripts/fetch-launchgood-stats.js"
   },
+  "dependencies": {
+    "puppeteer-core": "^23.7.0"
+  },
   "engines": {
-    "node": ">=18"
+    "node": ">=20"
   }
 }

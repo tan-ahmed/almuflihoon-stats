@@ -2,8 +2,8 @@ name: Update LaunchGood campaign stats
 
 on:
   schedule:
-    # Run every 6 hours
-    - cron: "0 */6 * * *"
+    # Run once a day at 00:00 UTC
+    - cron: "0 0 * * *"
   workflow_dispatch:
     # Allow manual run from Actions tab
 
@@ -19,9 +19,17 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "25"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Setup Chrome
+        uses: browser-actions/setup-chrome@v1
 
       - name: Fetch LaunchGood stats
+        env:
+          PUPPETEER_EXECUTABLE_PATH: ${{ env.CHROME_PATH }}
         run: node scripts/fetch-launchgood-stats.js
 
       - name: Commit and push if changed
