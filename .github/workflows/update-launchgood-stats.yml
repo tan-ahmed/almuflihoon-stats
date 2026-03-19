@@ -1,5 +1,8 @@
 name: Update LaunchGood campaign stats
 
+permissions:
+  contents: write
+
 on:
   schedule:
     # Run once a day at 00:00 UTC
@@ -15,6 +18,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
