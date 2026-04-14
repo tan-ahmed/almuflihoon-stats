@@ -30,10 +30,11 @@ jobs:
 
       - name: Setup Chrome
         uses: browser-actions/setup-chrome@v2
+        id: chrome
 
       - name: Fetch LaunchGood stats
         env:
-          PUPPETEER_EXECUTABLE_PATH: ${{ env.CHROME_PATH }}
+          PUPPETEER_EXECUTABLE_PATH: ${{ steps.chrome.outputs.chrome-path }}
         run: node scripts/fetch-launchgood-stats.js
 
       - name: Commit and push if changed

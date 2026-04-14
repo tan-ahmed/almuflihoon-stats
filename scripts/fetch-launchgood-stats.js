@@ -53,6 +53,45 @@ function parseNumber(str) {
   return parseInt(String(str).replace(/,/g, ""), 10) || 0;
 }
 
+function pickRaisedFromText(text, goal) {
+  // Prefer the explicit progress phrase if present:
+  // "£11,020 raised of £15,000 GBP goal" (or variants without GBP)
+  const progressMatch = text.match(
+    /£\s*([\d,]+)\s*(?:GBP\s*)?raised\s+of\s+£\s*([\d,]+)\s*(?:GBP\s*)?(?:goal)?/i
+  );
+  if (progressMatch) {
+    const raised = parseNumber(progressMatch[1]);
+    const parsedGoal = parseNumber(progressMatch[2]);
+    return { raised, goal: parsedGoal || goal };
+  }
+
+  // Fallback: collect all currency amounts and pick a plausible "raised" value.
+  // The page can include small donation tier amounts (e.g. £20) which we should ignore.
+  const amounts = Array.from(text.matchAll(/£\s*([\d,]+)/g)).map((m) =>
+    parseNumber(m[1])
+  );
+
+  const unique = Array.from(new Set(amounts)).filter((n) => Number.isFinite(n));
+
+  // Ignore tiny values that are almost certainly donation tiers.
+  const nonTrivial = unique.filter((n) => n >= 100);
+
+  if (nonTrivial.length === 0) return { raised: 0, goal };
+
+  if (goal && goal > 0) {
+    // Prefer the largest amount that doesn't exceed the goal (raised should be <= goal).
+    const underOrEqualGoal = nonTrivial
+      .filter((n) => n <= goal)
+      .sort((a, b) => b - a);
+    if (underOrEqualGoal.length > 0) return { raised: underOrEqualGoal[0], goal };
+
+    // If everything exceeds goal (weird), just take the largest non-trivial amount.
+  }
+
+  nonTrivial.sort((a, b) => b - a);
+  return { raised: nonTrivial[0], goal };
+}
+
 async function scrapeWithPuppeteer() {
   const executablePath = getChromeExecutablePath();
 
@@ -79,18 +118,58 @@ async function scrapeWithPuppeteer() {
       timeout: 60_000,
     });
 
+    // The page often animates / counts up. Wait until the "£X raised of £Y" text is present
+    // and stable before reading `innerText`, otherwise we can capture an intermediate value.
+    const progressRegexSrc =
+      String.raw`£\s*([\d,]+)\s*(?:GBP\s*)?raised\s+of\s+£\s*([\d,]+)\s*(?:GBP\s*)?(?:goal)?`;
+
+    try {
+      await page.waitForFunction(
+        (reSrc) => {
+          const re = new RegExp(reSrc, "i");
+          const text = document.body?.innerText || "";
+          const m = text.match(re);
+          if (!m) return false;
+
+          const raised = parseInt(String(m[1]).replace(/,/g, ""), 10) || 0;
+          const goal = parseInt(String(m[2]).replace(/,/g, ""), 10) || 0;
+          if (raised < 100 || goal < 1000) return false;
+          if (goal > 0 && raised > goal) return false;
+
+          const w = window;
+          w.__lg_prevRaised = w.__lg_prevRaised ?? null;
+          w.__lg_prevAt = w.__lg_prevAt ?? 0;
+
+          const now = Date.now();
+          if (w.__lg_prevRaised === raised) {
+            // stable for >= 1200ms
+            return now - w.__lg_prevAt >= 1200;
+          }
+
+          w.__lg_prevRaised = raised;
+          w.__lg_prevAt = now;
+          return false;
+        },
+        { timeout: 45_000, polling: 250 },
+        progressRegexSrc
+      );
+    } catch {
+      // If this times out (markup changes, banner blocks text, etc), we still attempt a best-effort parse below.
+    }
+
     // Use innerText-based regexes so we are resilient to DOM / class changes.
     const text = await page.evaluate(() => document.body.innerText || "");
 
     const stats = { ...DEFAULT };
 
-    // Raised: look for currency-prefixed number (e.g. "£9,003")
-    const raisedMatch = text.match(/£\s*([\d,]+)/);
-    if (raisedMatch) stats.raised = parseNumber(raisedMatch[1]);
-
     // Goal: "raised of £15,000 GBP goal" or similar
     const goalMatch = text.match(/raised\s+of\s+£\s*([\d,]+)\s*GBP/i);
     if (goalMatch) stats.goal = parseNumber(goalMatch[1]);
+
+    // Raised (and sometimes goal) from progress text; fallback to plausible currency amount
+    const { raised, goal } = pickRaisedFromText(text, stats.goal);
+    if (goal) stats.goal = goal;
+    if (raised) stats.raised = raised;
 
     // Supporters: "2971 supporters"
     const supportersMatch = text.match(/(\d[\d,]*)\s+supporters/i);
